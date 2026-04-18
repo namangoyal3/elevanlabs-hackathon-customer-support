@@ -8,23 +8,23 @@ AI co-pilot for customer support agents. Real-time KB retrieval, live transcript
 
 - **Next.js 14** (App Router, TypeScript, Tailwind)
 - **ElevenLabs** Conversational AI (browser SDK + post-call webhooks)
-- **Claude** (`claude-sonnet-4-6` / Haiku) for intent, summary, QA scoring
-- **Postgres + pgvector** on Railway for RAG and persistence
+- **NVIDIA Nemotron** via NIM (OpenAI-compatible) for intent (`nano-8b`), summary + QA (`super-49b-v1.5`)
+- **Supabase** (Postgres + pgvector + JS SDK) for RAG and persistence
 - **OpenAI `text-embedding-3-small`** for KB embeddings (placeholder until EL embedding API is GA)
 
 ## Phase 0 — Local setup
 
 ### Prerequisites
-Node 20+, npm 10+, a Railway Postgres instance, ElevenLabs / Anthropic / OpenAI API keys.
+Node 20+, npm 10+, a Supabase project, ElevenLabs / Anthropic / OpenAI API keys.
 
 ### 1. External services
 See setup steps in `CALLPILOT_PRD.md` §13 / §15. Short version:
 
 | Service | What you need |
 |---------|---------------|
-| Railway | A Postgres service. Run `CREATE EXTENSION IF NOT EXISTS vector;` once via the Data tab. Copy `DATABASE_URL` (append `?sslmode=require`). |
+| Supabase | New project. Database → Extensions → enable `vector`. Settings → Data API → copy `URL`. Settings → API Keys → copy `Publishable` (`sb_publishable_…`) and `Secret` (`sb_secret_…`) keys. Settings → Database → Connection string → URI (Direct, port 5432) → copy as `DATABASE_URL` (append `?sslmode=require`). |
 | ElevenLabs | Agent ID + API key. Create agent from "Customer Support" template. |
-| Anthropic | API key from console. |
+| NVIDIA | API key from build.nvidia.com (Nemotron LLM family). |
 | OpenAI | API key (used for embeddings only). |
 
 ### 2. Install

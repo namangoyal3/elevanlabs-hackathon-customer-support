@@ -1,42 +1,27 @@
-import { Pool, type PoolConfig, type QueryResult, type QueryResultRow } from 'pg';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 declare global {
   // eslint-disable-next-line no-var
-  var __pgPool: Pool | undefined;
+  var __supabaseAdmin: SupabaseClient | undefined;
 }
 
-function buildPool(): Pool {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL is not set. Add it to .env.local.');
+function buildClient(): SupabaseClient {
+  const url = process.env.SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url) throw new Error('SUPABASE_URL is not set. Add it to .env.local.');
+  if (!secretKey) {
+    throw new Error('SUPABASE_SECRET_KEY is not set. Add it to .env.local.');
   }
 
-  const config: PoolConfig = {
-    connectionString,
-    max: 10,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 10_000,
-  };
-
-  if (/sslmode=require/i.test(connectionString) || process.env.NODE_ENV === 'production') {
-    config.ssl = { rejectUnauthorized: false };
-  }
-
-  return new Pool(config);
+  return createClient(url, secretKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    db: { schema: 'public' },
+  });
 }
 
-function getPool(): Pool {
-  if (!global.__pgPool) {
-    global.__pgPool = buildPool();
+export function supabaseAdmin(): SupabaseClient {
+  if (!global.__supabaseAdmin) {
+    global.__supabaseAdmin = buildClient();
   }
-  return global.__pgPool;
+  return global.__supabaseAdmin;
 }
-
-export const db = {
-  query<T extends QueryResultRow = QueryResultRow>(
-    text: string,
-    params?: ReadonlyArray<unknown>,
-  ): Promise<QueryResult<T>> {
-    return getPool().query<T>(text, params as unknown as unknown[]);
-  },
-};

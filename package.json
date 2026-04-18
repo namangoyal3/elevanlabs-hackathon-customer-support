@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@elevenlabs/react": "^0.6.0",
-    "@anthropic-ai/sdk": "^0.27.0",
+    "@supabase/supabase-js": "^2.46.1",
     "next": "^14.2.18",
     "openai": "^4.73.0",
     "pg": "^8.13.1",

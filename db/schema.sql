@@ -75,3 +75,39 @@ CREATE TABLE IF NOT EXISTS audit_log (
   payload    JSONB,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ──────────────────────────────────────────────────────────────
+-- RPC functions (called via supabase.rpc('name', {...}))
+-- ──────────────────────────────────────────────────────────────
+
+-- Health probe: surfaces server time + pgvector availability.
+CREATE OR REPLACE FUNCTION health()
+RETURNS TABLE (now TIMESTAMPTZ, vector_installed BOOLEAN)
+LANGUAGE SQL STABLE
+AS $$
+  SELECT now(),
+         EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector');
+$$;
+
+-- KB vector search: cosine similarity, threshold-filtered, top-K.
+CREATE OR REPLACE FUNCTION match_kb_articles(
+  query_embedding vector(1536),
+  match_threshold FLOAT,
+  match_count     INT
+)
+RETURNS TABLE (
+  id         TEXT,
+  title      TEXT,
+  content    TEXT,
+  url        TEXT,
+  similarity FLOAT
+)
+LANGUAGE SQL STABLE
+AS $$
+  SELECT id, title, content, url,
+         1 - (embedding <=> query_embedding) AS similarity
+  FROM kb_articles
+  WHERE 1 - (embedding <=> query_embedding) > match_threshold
+  ORDER BY similarity DESC
+  LIMIT match_count;
+$$;

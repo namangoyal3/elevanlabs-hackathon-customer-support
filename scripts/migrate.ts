@@ -1,7 +1,10 @@
-import 'dotenv/config';
 import fs from 'node:fs';
 import path from 'node:path';
+import * as dotenv from 'dotenv';
 import { Client } from 'pg';
+
+dotenv.config({ path: '.env.local' });
+dotenv.config(); // fallback to .env if present
 
 const SCHEMA_PATH = path.join(process.cwd(), 'db', 'schema.sql');
 
@@ -14,7 +17,8 @@ async function main() {
   const sql = fs.readFileSync(SCHEMA_PATH, 'utf-8');
   const client = new Client({
     connectionString,
-    ssl: /sslmode=require/i.test(connectionString) ? { rejectUnauthorized: false } : undefined,
+    // Supabase always requires SSL; their cert chain isn't in Node's default trust store.
+    ssl: { rejectUnauthorized: false },
   });
 
   await client.connect();
