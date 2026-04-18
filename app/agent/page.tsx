@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import type { KbArticle } from '@/types';
+import { useEffect, useRef, useState } from 'react';
+import type { KbArticle, TranscriptChunk } from '@/types';
 import { useCallStore } from '@/lib/store';
+import { useCallPilot } from '@/lib/elevenlabs-agent';
 import type { DemoPersona } from '@/lib/demo-personas';
 
 import { PersonaPicker } from '@/components/PersonaPicker';
@@ -40,8 +41,89 @@ function useCallTimer(active: boolean): string {
   return `${mm}:${ss}`;
 }
 
+/** Open an EventSource for `callId`, dispatching parsed events into the store.
+ *  Auto-closes on unmount. */
+function useSseSubscription(callId: string | null) {
+  const applyTranscript = useCallStore((s) => s.appendTranscript);
+  const setKbCards = useCallStore((s) => s.setKbCards);
+  const setSentiment = useCallStore((s) => s.setSentiment);
+  const setIntent = useCallStore((s) => s.setIntent);
+  const triggerEscalation = useCallStore((s) => s.triggerEscalation);
+  const setSuggestedReplies = useCallStore((s) => s.setSuggestedReplies);
+  const setSummary = useCallStore((s) => s.setSummary);
+
+  const esRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    if (!callId) return;
+    const es = new EventSource(`/api/stream?callId=${encodeURIComponent(callId)}`);
+    esRef.current = es;
+
+    const onTranscript = (e: MessageEvent) => {
+      try {
+        const payload = JSON.parse(e.data) as { chunk: TranscriptChunk };
+        if (payload.chunk) applyTranscript(payload.chunk);
+      } catch {}
+    };
+    const onIntent = (e: MessageEvent) => {
+      try {
+        const p = JSON.parse(e.data) as { label: string; confidence: number };
+        setIntent(p.label, p.confidence);
+      } catch {}
+    };
+    const onKbUpdate = (e: MessageEvent) => {
+      try {
+        const p = JSON.parse(e.data) as { articles: KbArticle[] };
+        if (p.articles?.length) setKbCards(p.articles);
+      } catch {}
+    };
+    const onSentiment = (e: MessageEvent) => {
+      try {
+        const p = JSON.parse(e.data) as { score: number };
+        setSentiment(p.score);
+      } catch {}
+    };
+    const onEscalation = () => triggerEscalation();
+    const onReplies = (e: MessageEvent) => {
+      try {
+        const p = JSON.parse(e.data) as { replies: string[] };
+        setSuggestedReplies(p.replies);
+      } catch {}
+    };
+    const onSummary = (e: MessageEvent) => {
+      try {
+        const p = JSON.parse(e.data) as { summary: Parameters<typeof setSummary>[0] };
+        if (p.summary) setSummary(p.summary);
+      } catch {}
+    };
+
+    es.addEventListener('transcript', onTranscript);
+    es.addEventListener('intent', onIntent);
+    es.addEventListener('kb_update', onKbUpdate);
+    es.addEventListener('sentiment', onSentiment);
+    es.addEventListener('escalation', onEscalation);
+    es.addEventListener('suggested_replies', onReplies);
+    es.addEventListener('post_call_summary', onSummary);
+
+    return () => {
+      es.close();
+      esRef.current = null;
+    };
+  }, [
+    callId,
+    applyTranscript,
+    setKbCards,
+    setSentiment,
+    setIntent,
+    triggerEscalation,
+    setSuggestedReplies,
+    setSummary,
+  ]);
+}
+
 export default function AgentDashboardPage() {
   const status = useCallStore((s) => s.status);
+  const callId = useCallStore((s) => s.callId);
   const contact = useCallStore((s) => s.contact);
   const transcript = useCallStore((s) => s.transcript);
   const kbCards = useCallStore((s) => s.kbCards);
@@ -53,24 +135,30 @@ export default function AgentDashboardPage() {
   const summary = useCallStore((s) => s.summary);
 
   const pickPersona = useCallStore((s) => s.pickPersona);
-  const startCall = useCallStore((s) => s.startCall);
-  const endCall = useCallStore((s) => s.endCall);
   const reset = useCallStore((s) => s.reset);
   const dismissEscalation = useCallStore((s) => s.dismissEscalation);
 
+  const pilot = useCallPilot();
   const timer = useCallTimer(status === 'active');
 
+  useSseSubscription(callId);
+
+  const [pickedPersona, setPickedPersona] = useState<DemoPersona | null>(null);
+
   const onPickPersona = async (p: DemoPersona) => {
+    setPickedPersona(p);
     pickPersona(p);
     const preloaded = await fetchPreloadedKb(p.predictedKbIds);
-    if (preloaded.length > 0) {
-      useCallStore.getState().setKbCards(preloaded);
-    }
+    if (preloaded.length > 0) useCallStore.getState().setKbCards(preloaded);
   };
 
-  const onStart = () => {
-    const id = `demo-call-${Math.random().toString(36).slice(2, 10)}`;
-    startCall(id);
+  const onStart = async () => {
+    if (!pickedPersona) return;
+    await pilot.start(pickedPersona);
+  };
+
+  const onEnd = async () => {
+    await pilot.stop();
   };
 
   return (
@@ -89,7 +177,9 @@ export default function AgentDashboardPage() {
             </span>
           )}
           {status === 'ended' && <span className="text-muted text-sm">Call ended</span>}
-          <CallControls status={status} onStart={onStart} onEnd={endCall} onReset={reset} />
+          {pilot.status === 'connecting' && <span className="text-muted text-sm">Connecting…</span>}
+          {pilot.error && <span className="text-red-400 text-sm">{pilot.error}</span>}
+          <CallControls status={status} onStart={onStart} onEnd={onEnd} onReset={reset} />
         </div>
       </header>
 
@@ -102,14 +192,12 @@ export default function AgentDashboardPage() {
         </div>
       ) : (
         <div className="grid flex-1 grid-cols-5 gap-4 overflow-hidden p-4">
-          {/* Left column — 40% */}
           <section className="col-span-2 flex min-h-0 flex-col gap-3">
             {contact && <CallerBrief contact={contact} />}
             <LiveTranscript chunks={transcript} />
             {status !== 'pre_call' && <SentimentBar score={sentimentScore} />}
           </section>
 
-          {/* Right column — 60% */}
           <section className="col-span-3 flex min-h-0 flex-col gap-3 overflow-y-auto">
             <div className="flex items-center gap-3">
               <IntentBadge label={intentLabel} confidence={intentConfidence} />
@@ -127,10 +215,8 @@ export default function AgentDashboardPage() {
         </div>
       )}
 
-      {/* Post-call drawer */}
       {status === 'ended' && <PostCallSummary summary={summary} />}
 
-      {/* Dev-only demo cycler (shown with ?demo=1) */}
       <DemoCycler />
     </main>
   );
