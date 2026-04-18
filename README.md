@@ -72,5 +72,17 @@ kb/novapay/             knowledge base markdown (Phase 1)
 
 ## Roadmap
 
-Phase 0 ✅ scaffold · Phase 1 KB · Phase 2 UI · Phase 3 live call · Phase 4 post-call · Phase 5 deploy.
-See `CALLPILOT_PRD.md` §16–17 for the full breakdown.
+Phase 0 ✅ scaffold · Phase 1 ✅ KB + RAG · Phase 2 UI · Phase 3 live call · Phase 4 post-call · Phase 5 deploy.
+See [`docs/PLAN.md`](docs/PLAN.md) for per-phase details.
+
+## Commands
+
+```bash
+npm run dev                  # Next.js dev server
+npm run typecheck            # tsc --noEmit
+npm test                     # node:test suites in tests/
+npm run db:migrate           # apply db/schema.sql
+MIGRATE_RESET_KB=true npm run db:migrate  # destructive — drop + recreate kb_articles
+npm run db:ingest-kb         # embed kb/novapay/*.md via NVIDIA → kb_articles
+npm run smoke:rag            # verify the 3 PRD demo queries retrieve the right articles
+```

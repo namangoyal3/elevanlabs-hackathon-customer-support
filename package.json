@@ -8,8 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
     "db:migrate": "tsx scripts/migrate.ts",
-    "db:ingest-kb": "tsx scripts/ingest-kb.ts"
+    "db:ingest-kb": "tsx scripts/ingest-kb.ts",
+    "smoke:rag": "tsx scripts/smoke-rag.ts"
   },
   "dependencies": {
     "@elevenlabs/react": "^0.6.0",

@@ -32,12 +32,13 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
 CREATE INDEX IF NOT EXISTS idx_transcript_call ON transcript_chunks(call_id, timestamp);
 
 -- Knowledge base
+-- Embedding dim 1024 matches NVIDIA nv-embedqa-e5-v5 (asymmetric retrieval).
 CREATE TABLE IF NOT EXISTS kb_articles (
   id         TEXT PRIMARY KEY,
   title      TEXT NOT NULL,
   content    TEXT NOT NULL,
   url        TEXT,
-  embedding  vector(1536),
+  embedding  vector(1024),
   company_id TEXT DEFAULT 'novapay',
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -91,7 +92,7 @@ $$;
 
 -- KB vector search: cosine similarity, threshold-filtered, top-K.
 CREATE OR REPLACE FUNCTION match_kb_articles(
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   match_threshold FLOAT,
   match_count     INT
 )
