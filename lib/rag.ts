@@ -55,8 +55,23 @@ export async function ragSearch(
   }));
 }
 
+/**
+ * Pull the first N sentences out of a Markdown body for display in a
+ * KbCard snippet. Strips the leading H1, collapses whitespace, and removes
+ * the common Markdown emphasis syntax (`**bold**`, `*em*`, `` `code` ``,
+ * `[text](url)`) so snippets render as plain prose in the UI rather than
+ * leaking raw syntax.
+ */
 export function firstSentences(text: string, count: number): string {
-  const clean = text.replace(/^#\s.*\n+/, '').replace(/\s+/g, ' ').trim();
+  const clean = text
+    .replace(/^#\s.*\n+/, '')
+    .replace(/```[\s\S]*?```/g, '') // fenced code blocks
+    .replace(/`([^`]+)`/g, '$1') // inline code
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) → text
+    .replace(/\*\*([^*]+)\*\*/g, '$1') // **bold** → bold
+    .replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g, '$1') // *em* → em
+    .replace(/\s+/g, ' ')
+    .trim();
   const parts = clean.split(/(?<=[.!?])\s+/).slice(0, count);
   return parts.join(' ');
 }
