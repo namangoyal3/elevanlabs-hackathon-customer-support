@@ -163,11 +163,12 @@ export default function AgentDashboardPage() {
 
   return (
     <main className="bg-bg flex min-h-screen flex-col text-white">
+      <h1 className="sr-only">NovaPay Support agent dashboard — CallPilot co-pilot</h1>
       {/* Header */}
       <header className="border-border flex items-center justify-between border-b px-6 py-3">
         <div className="flex items-baseline gap-3">
-          <span className="font-serif text-lg">NovaPay Support</span>
-          <span className="text-muted text-xs">CallPilot co-pilot</span>
+          <span className="font-serif text-lg" aria-hidden="true">NovaPay Support</span>
+          <span className="text-muted text-xs" aria-hidden="true">CallPilot co-pilot</span>
         </div>
         <div className="flex items-center gap-4">
           {status === 'active' && (
