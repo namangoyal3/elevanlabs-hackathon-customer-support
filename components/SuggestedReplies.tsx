@@ -7,7 +7,7 @@ interface Props {
 }
 
 export function SuggestedReplies({ replies }: Props) {
-  const [flashing, setFlashing] = useState<number | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
   if (replies.length === 0) return null;
 
@@ -15,29 +15,34 @@ export function SuggestedReplies({ replies }: Props) {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      // clipboard API unavailable (e.g. insecure context) — fallback: do nothing,
-      // chip flash still shows visual feedback
+      // clipboard unavailable (insecure context); chip flash still provides feedback
     }
-    setFlashing(idx);
-    setTimeout(() => setFlashing(null), 600);
+    setCopiedIdx(idx);
+    setTimeout(() => setCopiedIdx(null), 1200);
   };
 
   return (
     <section className="space-y-2">
-      <h3 className="text-muted text-xs uppercase tracking-wide">Suggested replies</h3>
-      <div className="flex flex-wrap gap-2">
+      <h3 className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">Suggested replies</h3>
+      <ul className="flex flex-col gap-1.5">
         {replies.map((r, i) => (
-          <button
-            key={i}
-            onClick={() => copy(r, i)}
-            className={`border-border bg-surface hover:bg-accent/20 rounded-full border px-3 py-1 text-left text-sm transition-colors ${
-              flashing === i ? 'bg-accent/40' : ''
-            }`}
-          >
-            {r}
-          </button>
+          <li key={i}>
+            <button
+              onClick={() => copy(r, i)}
+              className="border-border bg-surface hover:bg-surface-2 hover:border-border-strong group flex w-full items-center justify-between gap-3 rounded-md border px-3.5 py-2.5 text-left text-sm transition-colors"
+            >
+              <span className="text-fg">{r}</span>
+              <span
+                className={`shrink-0 text-2xs uppercase tracking-[0.12em] transition-colors ${
+                  copiedIdx === i ? 'text-accent-fg' : 'text-fg-subtle group-hover:text-fg-muted'
+                }`}
+              >
+                {copiedIdx === i ? 'Copied' : 'Copy'}
+              </span>
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
     </section>
   );
 }

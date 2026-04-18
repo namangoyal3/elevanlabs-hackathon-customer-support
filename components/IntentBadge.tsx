@@ -3,37 +3,54 @@ interface Props {
   confidence: number;
 }
 
-const INTENT_COLORS: Record<string, string> = {
-  failed_transaction: 'bg-blue-600/20 text-blue-200 ring-blue-500/40',
-  kyc_issue: 'bg-amber-600/20 text-amber-200 ring-amber-500/40',
-  loan_status: 'bg-violet-600/20 text-violet-200 ring-violet-500/40',
-  wallet_topup: 'bg-cyan-600/20 text-cyan-200 ring-cyan-500/40',
-  chargeback: 'bg-pink-600/20 text-pink-200 ring-pink-500/40',
-  account_freeze: 'bg-orange-600/20 text-orange-200 ring-orange-500/40',
-  rewards: 'bg-emerald-600/20 text-emerald-200 ring-emerald-500/40',
-  privacy: 'bg-slate-500/20 text-slate-200 ring-slate-400/40',
-  other: 'bg-neutral-700/40 text-neutral-200 ring-neutral-500/40',
+const INTENT_STYLES: Record<string, string> = {
+  failed_transaction: 'bg-sky-500/10 text-sky-100 ring-sky-500/30',
+  kyc_issue:          'bg-amber-500/10 text-amber-100 ring-amber-500/30',
+  loan_status:        'bg-violet-500/10 text-violet-100 ring-violet-500/30',
+  wallet_topup:       'bg-cyan-500/10 text-cyan-100 ring-cyan-500/30',
+  chargeback:         'bg-pink-500/10 text-pink-100 ring-pink-500/30',
+  account_freeze:     'bg-orange-500/10 text-orange-100 ring-orange-500/30',
+  rewards:            'bg-emerald-500/10 text-emerald-100 ring-emerald-500/30',
+  privacy:            'bg-slate-400/10 text-slate-100 ring-slate-400/30',
+  other:              'bg-fg-subtle/10 text-fg-muted ring-fg-subtle/30',
 };
 
-function humanize(label: string): string {
-  if (!label) return 'Listening…';
-  return label
-    .split('_')
-    .map((w) => w[0]?.toUpperCase() + w.slice(1))
-    .join(' ');
-}
+const LABELS: Record<string, string> = {
+  failed_transaction: 'Failed transaction',
+  kyc_issue: 'KYC issue',
+  loan_status: 'Loan status',
+  wallet_topup: 'Wallet top-up',
+  chargeback: 'Chargeback',
+  account_freeze: 'Account freeze',
+  rewards: 'Rewards',
+  privacy: 'Privacy',
+  other: 'Other',
+};
 
 export function IntentBadge({ label, confidence }: Props) {
-  const styles = INTENT_COLORS[label] ?? INTENT_COLORS.other;
-  const pct = Math.round(confidence * 100);
   const shown = label !== '' && confidence >= 0.7;
+
+  if (!shown) {
+    return (
+      <div className="bg-surface border-border text-fg-muted inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
+        <span className="bg-fg-muted/60 animate-pulse-dot h-1.5 w-1.5 rounded-full" aria-hidden="true" />
+        <span>Listening</span>
+      </div>
+    );
+  }
+
+  const humanLabel = LABELS[label] ?? label.replace(/_/g, ' ');
+  const pct = Math.round(confidence * 100);
+  const styles = INTENT_STYLES[label] ?? INTENT_STYLES.other;
 
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ring-1 transition-all ${styles}`}
+      className={`animate-rise-in inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${styles}`}
     >
-      <span>{humanize(label)}</span>
-      {shown && <span className="text-xs opacity-80">· {pct}%</span>}
+      <span>{humanLabel}</span>
+      <span className="text-2xs font-mono opacity-80" data-nums>
+        {pct}%
+      </span>
     </div>
   );
 }

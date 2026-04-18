@@ -4,28 +4,50 @@ interface Props {
 }
 
 export function SentimentBar({ score }: Props) {
-  // Normalize [-1, 1] → [0, 100] for bar width.
+  // Normalize [-1, 1] → [0, 100].
   const pct = Math.max(0, Math.min(100, Math.round(((score + 1) / 2) * 100)));
 
-  const color =
-    score >= 0.3 ? 'bg-emerald-500' : score >= 0 ? 'bg-amber-400' : 'bg-red-500';
+  const track =
+    score >= 0.3
+      ? 'bg-emerald-400/90'
+      : score >= 0
+      ? 'bg-amber-300/90'
+      : score >= -0.6
+      ? 'bg-orange-400/90'
+      : 'bg-alert';
 
   const label =
-    score >= 0.3 ? 'Positive' : score >= 0 ? 'Neutral' : score >= -0.6 ? 'Negative' : 'Hostile';
+    score >= 0.3
+      ? 'Positive'
+      : score >= 0
+      ? 'Neutral'
+      : score >= -0.6
+      ? 'Negative'
+      : 'Hostile';
 
   return (
-    <section className="border-border bg-surface rounded-lg border p-4">
+    <section className="border-border bg-surface shadow-card rounded-lg border p-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-muted text-xs uppercase tracking-wide">Customer sentiment</h3>
-        <span className="font-mono text-sm">{score.toFixed(2)}</span>
+        <div>
+          <h3 className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">Customer sentiment</h3>
+          <p className="text-fg-muted text-2xs mt-0.5">{label}</p>
+        </div>
+        <span className="font-mono text-sm" data-nums>
+          {score >= 0 ? '+' : ''}
+          {score.toFixed(2)}
+        </span>
       </div>
-      <div className="bg-bg mt-2 h-2 overflow-hidden rounded">
+      <div className="bg-bg border-border mt-3 h-1.5 overflow-hidden rounded-full border">
         <div
-          className={`${color} h-full transition-all duration-500 ease-out`}
+          className={`${track} h-full rounded-full transition-all duration-500 ease-out`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="text-muted mt-1 text-xs">{label}</p>
+      <div className="text-fg-subtle mt-1 flex justify-between text-2xs font-mono">
+        <span>−1</span>
+        <span>0</span>
+        <span>+1</span>
+      </div>
     </section>
   );
 }

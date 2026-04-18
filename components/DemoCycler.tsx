@@ -84,10 +84,10 @@ export function DemoCycler() {
   return (
     <button
       onClick={runScenario}
-      className="fixed bottom-4 right-4 rounded-full border border-yellow-400/60 bg-yellow-400/10 px-4 py-2 text-xs font-mono text-yellow-200 hover:bg-yellow-400/20"
-      title="Dev-only: cycles through idle→pre_call→active→ended with scripted data"
+      className="fixed bottom-3 left-3 rounded-full border border-amber-300/50 bg-amber-300/10 px-3 py-1.5 text-2xs uppercase tracking-[0.12em] font-mono text-amber-200 hover:bg-amber-300/20 backdrop-blur"
+      title="Dev-only: cycles idle → pre_call → active → ended with scripted data"
     >
-      ▶ Cycle demo states
+      ▶ Cycle demo
     </button>
   );
 }

@@ -6,18 +6,26 @@ export function EscalationAlert({ onDismiss }: Props) {
   return (
     <div
       role="alert"
-      className="bg-alert animate-in fade-in slide-in-from-top-2 mx-4 mt-4 flex items-start justify-between gap-3 rounded-md px-4 py-3 text-white duration-200"
+      className="bg-alert/90 shadow-card animate-rise-in border-alert/70 mx-4 mt-4 flex items-start justify-between gap-3 rounded-lg border px-5 py-3 text-alert-fg backdrop-blur"
     >
-      <div>
-        <p className="font-semibold">⚠ Customer frustration detected</p>
-        <p className="text-sm text-red-100">
-          Consider offering to escalate or proactively acknowledging their concern.
-        </p>
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="bg-alert-fg/15 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm"
+        >
+          !
+        </span>
+        <div>
+          <p className="text-alert-fg font-semibold leading-tight">Customer frustration detected</p>
+          <p className="text-alert-fg/85 mt-0.5 text-sm leading-snug">
+            Consider acknowledging their concern or proactively offering a supervisor.
+          </p>
+        </div>
       </div>
       <button
         onClick={onDismiss}
         aria-label="Dismiss escalation alert"
-        className="text-sm underline decoration-red-200 hover:decoration-white"
+        className="text-alert-fg/80 hover:text-alert-fg shrink-0 text-2xs uppercase tracking-[0.12em]"
       >
         Dismiss
       </button>
