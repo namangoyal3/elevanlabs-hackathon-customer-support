@@ -11,23 +11,23 @@ export function EscalationAlert({ onDismiss }: Props) {
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
-          className="bg-alert-fg/15 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm"
+          className="bg-alert-fg/15 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-base"
         >
-          !
+          ⚠
         </span>
         <div>
           <p className="text-alert-fg font-semibold leading-tight">Customer frustration detected</p>
           <p className="text-alert-fg/85 mt-0.5 text-sm leading-snug">
-            Consider acknowledging their concern or proactively offering a supervisor.
+            Consider acknowledging or escalating to a supervisor.
           </p>
         </div>
       </div>
       <button
         onClick={onDismiss}
-        aria-label="Dismiss escalation alert"
-        className="text-alert-fg/80 hover:text-alert-fg shrink-0 text-2xs uppercase tracking-[0.12em]"
+        aria-label="Dismiss"
+        className="text-alert-fg/80 hover:text-alert-fg shrink-0 text-sm transition-colors"
       >
-        Dismiss
+        ✕
       </button>
     </div>
   );

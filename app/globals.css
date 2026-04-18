@@ -4,6 +4,7 @@
 
 :root {
   color-scheme: dark;
+  --header-h: 72px;
 }
 
 html,
@@ -31,7 +32,7 @@ body {
   }
   :focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgb(26 102 72 / 0.55);
+    box-shadow: 0 0 0 2px rgb(26 102 72 / 0.55), 0 0 0 4px rgb(26 102 72 / 0.15);
     border-radius: inherit;
   }
   ::selection {

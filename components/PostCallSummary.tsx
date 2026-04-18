@@ -18,56 +18,115 @@ const DISPOSITION_LABEL: Record<CallSummary['disposition'], string> = {
   abandoned: 'Abandoned',
 };
 
+const SENTIMENT_SYMBOL: Record<CallSummary['sentimentTrend'], string> = {
+  positive:  '↑',
+  recovered: '↑',
+  neutral:   '→',
+  negative:  '↓',
+};
+
+const SENTIMENT_COLOR: Record<CallSummary['sentimentTrend'], string> = {
+  positive:  'text-emerald-400',
+  recovered: 'text-emerald-400',
+  neutral:   'text-amber-300',
+  negative:  'text-alert-fg',
+};
+
+function LoadingSkeleton() {
+  return (
+    <div className="border-border bg-surface shadow-card animate-rise-in flex flex-col gap-4 overflow-hidden rounded-lg border p-5">
+      <div className="flex items-center justify-between">
+        <div className="bg-surface-2 h-3 w-32 animate-pulse rounded" />
+        <div className="bg-surface-2 h-6 w-20 animate-pulse rounded-full" />
+      </div>
+      {/* Summary text skeleton */}
+      <div className="space-y-2">
+        <div className="bg-surface-2 h-4 w-full animate-pulse rounded" />
+        <div className="bg-surface-2 h-4 w-5/6 animate-pulse rounded" />
+        <div className="bg-surface-2 h-4 w-4/5 animate-pulse rounded" />
+      </div>
+      {/* Metadata row skeleton */}
+      <div className="flex gap-4">
+        <div className="bg-surface-2 h-8 w-24 animate-pulse rounded" />
+        <div className="bg-surface-2 h-8 w-16 animate-pulse rounded" />
+      </div>
+      {/* Follow-up skeleton */}
+      <div className="space-y-2">
+        <div className="bg-surface-2 h-3 w-20 animate-pulse rounded" />
+        <div className="bg-surface-2 h-4 w-full animate-pulse rounded" />
+        <div className="bg-surface-2 h-4 w-11/12 animate-pulse rounded" />
+        <div className="bg-surface-2 h-4 w-10/12 animate-pulse rounded" />
+      </div>
+    </div>
+  );
+}
+
 export function PostCallSummary({ summary }: Props) {
   if (!summary) {
-    return (
-      <div className="border-border bg-surface shadow-card mx-4 mb-4 rounded-lg border p-5">
-        <div className="flex items-center gap-3">
-          <span
-            aria-hidden="true"
-            className="bg-accent/50 animate-pulse-dot h-2 w-2 rounded-full"
-          />
-          <p className="text-fg-muted text-sm">Generating post-call summary…</p>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton />;
   }
 
   return (
-    <div className="border-border bg-surface shadow-card animate-rise-in mx-4 mb-4 overflow-hidden rounded-lg border">
-      <header className="border-border flex items-center justify-between border-b px-5 py-3">
+    <div className="border-border bg-surface shadow-card animate-rise-in overflow-hidden rounded-lg border">
+      {/* Header: label left, disposition badge centered */}
+      <header className="border-border border-b px-5 py-4">
         <h3 className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">Post-call summary</h3>
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-2xs font-medium uppercase tracking-[0.1em] ring-1 ring-inset ${DISPOSITION_STYLES[summary.disposition]}`}
-        >
-          {DISPOSITION_LABEL[summary.disposition]}
-        </span>
+        <div className="mt-3 flex justify-center">
+          <span
+            className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${DISPOSITION_STYLES[summary.disposition]}`}
+          >
+            {DISPOSITION_LABEL[summary.disposition]}
+          </span>
+        </div>
       </header>
 
-      <div className="grid gap-5 px-5 py-4 md:grid-cols-[1fr_auto]">
+      {/* Summary text */}
+      <div className="px-5 py-4">
         <p className="text-fg leading-relaxed">{summary.text}</p>
+      </div>
 
-        <dl className="text-2xs uppercase tracking-[0.12em] grid grid-cols-2 gap-x-5 gap-y-1 md:grid-cols-1 md:gap-y-2">
-          <dt className="text-fg-subtle">Sentiment</dt>
-          <dd className="text-fg capitalize">{summary.sentimentTrend}</dd>
-          <dt className="text-fg-subtle">CSAT</dt>
-          <dd className="text-fg font-mono" data-nums>
-            {Math.round(summary.csatPrediction * 100)}%
-          </dd>
+      {/* Metadata strip */}
+      <div className="border-border border-t px-5 py-3">
+        <dl className="flex items-center gap-6 text-sm">
+          <div>
+            <dt className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">Sentiment</dt>
+            <dd className="text-fg mt-0.5 flex items-center gap-1 capitalize">
+              <span
+                className={`font-medium ${SENTIMENT_COLOR[summary.sentimentTrend]}`}
+                aria-hidden="true"
+              >
+                {SENTIMENT_SYMBOL[summary.sentimentTrend]}
+              </span>
+              {summary.sentimentTrend}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">CSAT</dt>
+            <dd className="text-fg mt-0.5 font-mono font-medium" data-nums>
+              {Math.round(summary.csatPrediction * 100)}%
+            </dd>
+          </div>
         </dl>
       </div>
 
+      {/* Follow-up actions */}
       {summary.followUpActions.length > 0 && (
         <div className="border-border border-t px-5 py-4">
-          <p className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">Follow-up</p>
-          <ul className="mt-2 space-y-1.5">
+          <p className="text-fg-subtle border-border mb-3 border-b pb-2 text-2xs uppercase tracking-[0.12em]">Follow-up</p>
+          <ol className="space-y-2.5">
             {summary.followUpActions.map((a, i) => (
-              <li key={i} className="text-fg flex items-start gap-2.5 text-sm leading-snug">
-                <span aria-hidden="true" className="text-fg-subtle mt-[0.35rem] h-[3px] w-[3px] shrink-0 rounded-full bg-current" />
+              <li key={i} className="text-fg flex items-start gap-3 text-sm leading-snug">
+                <span
+                  aria-hidden="true"
+                  className="text-fg-subtle font-mono text-2xs mt-0.5 shrink-0 tabular-nums"
+                >
+                  {i + 1}.
+                </span>
+                <span className="text-fg-subtle mr-1 shrink-0" aria-hidden="true">□</span>
                 {a}
               </li>
             ))}
-          </ul>
+          </ol>
         </div>
       )}
     </div>

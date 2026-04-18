@@ -160,30 +160,32 @@ export default function AgentDashboardPage() {
   };
 
   return (
-    <main className="bg-bg text-fg flex min-h-screen flex-col">
+    <main className="bg-bg text-fg flex h-dvh flex-col overflow-hidden">
       <h1 className="sr-only">NovaPay Support agent dashboard — CallPilot co-pilot</h1>
 
       {/* Header */}
-      <header className="border-border flex items-center justify-between border-b px-6 py-4">
+      <header className="bg-surface border-border flex items-center justify-between border-b px-6 py-5">
         <div className="flex items-baseline gap-2.5">
           <span className="font-serif text-2xl tracking-tight" aria-hidden="true">NovaPay</span>
-          <span className="text-fg-subtle text-2xs uppercase tracking-[0.16em]" aria-hidden="true">
+          <span className="text-fg text-2xs uppercase tracking-[0.2em]" aria-hidden="true">
             CallPilot
           </span>
         </div>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4">
           {status === 'active' && (
-            <span className="text-fg flex items-center gap-2 text-sm">
-              <span className="bg-alert animate-pulse-dot h-1.5 w-1.5 rounded-full" />
-              <span className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">Live</span>
-              <span className="font-mono" data-nums>{timer}</span>
+            <span className="bg-alert/15 border-alert/30 text-alert-fg flex items-center gap-2 rounded-full border px-3 py-1 text-sm">
+              <span className="bg-alert animate-pulse-dot h-1.5 w-1.5 rounded-full" aria-hidden="true" />
+              <span className="text-2xs uppercase tracking-[0.12em]">Live</span>
+              <span className="font-mono tabular-nums" data-nums>{timer}</span>
             </span>
           )}
           {status === 'ended' && (
             <span className="text-fg-muted text-2xs uppercase tracking-[0.12em]">Call ended</span>
           )}
           {pilot.status === 'connecting' && (
-            <span className="text-fg-muted text-2xs uppercase tracking-[0.12em]">Connecting…</span>
+            <span className="bg-fg-subtle/10 text-fg-muted flex items-center gap-2 rounded-full border border-border px-3 py-1 text-2xs uppercase tracking-[0.12em]">
+              Connecting…
+            </span>
           )}
           {pilot.error && <span className="text-alert-fg text-sm">{pilot.error}</span>}
           <CallControls status={status} onStart={onStart} onEnd={onEnd} onReset={reset} />
@@ -198,33 +200,43 @@ export default function AgentDashboardPage() {
           <PersonaPicker onPick={onPickPersona} />
         </div>
       ) : (
-        <div className="grid flex-1 grid-cols-1 gap-5 overflow-hidden p-5 md:grid-cols-5">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 overflow-hidden p-5 md:grid-cols-5">
           <section className="flex min-h-0 flex-col gap-4 md:col-span-2">
             {contact && <CallerBrief contact={contact} />}
-            <LiveTranscript chunks={transcript} />
+            <LiveTranscript chunks={transcript} status={status} />
             {status !== 'pre_call' && <SentimentBar score={sentimentScore} />}
           </section>
 
           <section className="flex min-h-0 flex-col gap-4 overflow-y-auto md:col-span-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <IntentBadge label={intentLabel} confidence={intentConfidence} />
-              {status === 'pre_call' && (
-                <span className="text-fg-subtle text-2xs uppercase tracking-[0.12em]">
-                  Pre-loaded from call history
-                </span>
-              )}
-            </div>
-            {kbCards.length === 0 ? (
-              <p className="text-fg-muted text-sm italic">No articles surfaced yet.</p>
+            {status === 'ended' ? (
+              <PostCallSummary summary={summary} />
             ) : (
-              kbCards.slice(0, 2).map((c, i) => <KbCard key={c.id} article={c} rank={i + 1} />)
+              <>
+                {status === 'pre_call' && (
+                  <div className="bg-surface border-border rounded-lg border px-4 py-2.5">
+                    <p className="text-fg-muted text-sm">
+                      <span className="text-fg-subtle font-mono text-2xs uppercase tracking-[0.12em]">Pre-call</span>
+                      <span className="text-fg-subtle mx-2">·</span>
+                      Pre-loaded from call history. Press{' '}
+                      <span className="text-fg font-medium">Start call</span>{' '}
+                      to begin live analysis.
+                    </p>
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-3">
+                  <IntentBadge label={intentLabel} confidence={intentConfidence} />
+                </div>
+                {kbCards.length === 0 ? (
+                  <p className="text-fg-muted text-sm italic">No articles surfaced yet.</p>
+                ) : (
+                  kbCards.slice(0, 2).map((c, i) => <KbCard key={c.id} article={c} rank={i + 1} />)
+                )}
+                <SuggestedReplies replies={suggestedReplies} />
+              </>
             )}
-            <SuggestedReplies replies={suggestedReplies} />
           </section>
         </div>
       )}
-
-      {status === 'ended' && <PostCallSummary summary={summary} />}
 
       <DemoCycler />
     </main>

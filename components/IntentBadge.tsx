@@ -17,14 +17,25 @@ const INTENT_STYLES: Record<string, string> = {
 
 const LABELS: Record<string, string> = {
   failed_transaction: 'Failed transaction',
-  kyc_issue: 'KYC issue',
-  loan_status: 'Loan status',
-  wallet_topup: 'Wallet top-up',
-  chargeback: 'Chargeback',
-  account_freeze: 'Account freeze',
-  rewards: 'Rewards',
-  privacy: 'Privacy',
-  other: 'Other',
+  kyc_issue:          'KYC issue',
+  loan_status:        'Loan status',
+  wallet_topup:       'Wallet top-up',
+  chargeback:         'Chargeback',
+  account_freeze:     'Account freeze',
+  rewards:            'Rewards',
+  privacy:            'Privacy',
+  other:              'Other',
+};
+
+const SYMBOLS: Record<string, string> = {
+  failed_transaction: '↻',
+  kyc_issue:          '◉',
+  account_freeze:     '⊘',
+  loan_status:        '◎',
+  wallet_topup:       '◈',
+  chargeback:         '◇',
+  rewards:            '◈',
+  privacy:            '◉',
 };
 
 export function IntentBadge({ label, confidence }: Props) {
@@ -32,25 +43,24 @@ export function IntentBadge({ label, confidence }: Props) {
 
   if (!shown) {
     return (
-      <div className="bg-surface border-border text-fg-muted inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs">
+      <div className="bg-surface border-border text-fg-muted flex w-full items-center justify-center gap-2 rounded-full border px-4 py-1.5 text-sm">
         <span className="bg-fg-muted/60 animate-pulse-dot h-1.5 w-1.5 rounded-full" aria-hidden="true" />
-        <span>Listening</span>
+        <span>Detecting intent…</span>
       </div>
     );
   }
 
   const humanLabel = LABELS[label] ?? label.replace(/_/g, ' ');
-  const pct = Math.round(confidence * 100);
+  const symbol = SYMBOLS[label] ?? '◆';
   const styles = INTENT_STYLES[label] ?? INTENT_STYLES.other;
+  const opacityClass = confidence >= 0.85 ? 'opacity-100' : 'opacity-75';
 
   return (
     <div
-      className={`animate-rise-in inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${styles}`}
+      className={`animate-rise-in inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium ring-1 ring-inset ${styles} ${opacityClass}`}
     >
+      <span aria-hidden="true">{symbol}</span>
       <span>{humanLabel}</span>
-      <span className="text-2xs font-mono opacity-80" data-nums>
-        {pct}%
-      </span>
     </div>
   );
 }
