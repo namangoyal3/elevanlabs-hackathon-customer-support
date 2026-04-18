@@ -5,6 +5,7 @@ import { publish } from '@/lib/sse-bus';
 import { TranscriptHandler } from '@/lib/transcript-handler';
 import { detectIntent } from '@/lib/intent-parser';
 import { ragSearch } from '@/lib/rag';
+import { suggestedRepliesFor } from '@/lib/suggested-replies';
 import type { TranscriptChunk } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +47,11 @@ function getHandler(callId: string): TranscriptHandler {
 
       if (result.intent === last) return;
       lastIntentByCall.set(callId, result.intent);
+
+      publish(callId, {
+        type: 'suggested_replies',
+        replies: suggestedRepliesFor(result.intent),
+      });
 
       if (!result.query) return;
 

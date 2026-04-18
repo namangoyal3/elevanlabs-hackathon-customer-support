@@ -191,15 +191,15 @@ export default function AgentDashboardPage() {
           <PersonaPicker onPick={onPickPersona} />
         </div>
       ) : (
-        <div className="grid flex-1 grid-cols-5 gap-4 overflow-hidden p-4">
-          <section className="col-span-2 flex min-h-0 flex-col gap-3">
+        <div className="grid flex-1 grid-cols-1 gap-4 overflow-hidden p-4 md:grid-cols-5">
+          <section className="flex min-h-0 flex-col gap-3 md:col-span-2">
             {contact && <CallerBrief contact={contact} />}
             <LiveTranscript chunks={transcript} />
             {status !== 'pre_call' && <SentimentBar score={sentimentScore} />}
           </section>
 
-          <section className="col-span-3 flex min-h-0 flex-col gap-3 overflow-y-auto">
-            <div className="flex items-center gap-3">
+          <section className="flex min-h-0 flex-col gap-3 overflow-y-auto md:col-span-3">
+            <div className="flex flex-wrap items-center gap-3">
               <IntentBadge label={intentLabel} confidence={intentConfidence} />
               {status === 'pre_call' && (
                 <span className="text-muted text-xs italic">Pre-loaded from call history</span>
