@@ -4,9 +4,59 @@
 
 :root {
   color-scheme: dark;
+  --header-h: 72px;
 }
 
 html,
 body {
   height: 100%;
+}
+
+/*  Smart typographic defaults
+ *    - Text wraps balanced on headings (stops one-word orphans).
+ *    - Numbers use tabular-nums so timers + sentiment scores don't
+ *      shift width character-by-character.
+ *    - Smoother rendering on WebKit.
+ */
+@layer base {
+  h1, h2, h3, h4 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  .font-mono,
+  time,
+  [data-nums] {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(26 102 72 / 0.55), 0 0 0 4px rgb(26 102 72 / 0.15);
+    border-radius: inherit;
+  }
+  ::selection {
+    background-color: rgb(26 102 72 / 0.45);
+    color: #f8f7f3;
+  }
+}
+
+/* Subtle warm noise on the body background — adds tactility without
+ * being visible as a gradient. Kept at 2% alpha so it never becomes
+ * a "look". Disabled under prefers-reduced-motion for safety. */
+@media (prefers-reduced-motion: no-preference) {
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(ellipse at top left, rgb(26 102 72 / 0.06), transparent 50%),
+      radial-gradient(ellipse at bottom right, rgb(71 51 20 / 0.04), transparent 55%);
+    z-index: 0;
+  }
+  body > * {
+    position: relative;
+    z-index: 1;
+  }
 }

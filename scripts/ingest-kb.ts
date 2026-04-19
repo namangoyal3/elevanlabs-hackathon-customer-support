@@ -5,33 +5,38 @@ import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 
 dotenv.config({ path: '.env.local' });
-dotenv.config(); // fallback to .env if present
+dotenv.config();
 
 const KB_DIR = path.join(process.cwd(), 'kb', 'novapay');
 
 async function main() {
   const url = process.env.SUPABASE_URL;
   const secretKey = process.env.SUPABASE_SECRET_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
+  const nvidiaKey = process.env.NVIDIA_API_KEY;
   if (!url) throw new Error('SUPABASE_URL is not set');
   if (!secretKey) throw new Error('SUPABASE_SECRET_KEY is not set');
-  if (!openaiKey) throw new Error('OPENAI_API_KEY is not set');
+  if (!nvidiaKey) throw new Error('NVIDIA_API_KEY is not set');
 
   if (!fs.existsSync(KB_DIR)) {
-    console.log(`→ ${KB_DIR} does not exist yet. Add markdown articles in Phase 1.`);
+    console.log(`→ ${KB_DIR} does not exist yet.`);
     return;
   }
 
   const files = fs.readdirSync(KB_DIR).filter((f) => f.endsWith('.md'));
   if (files.length === 0) {
-    console.log('→ No KB markdown files found. Add articles to kb/novapay/ first.');
+    console.log('→ No KB markdown files found.');
     return;
   }
 
   const supabase = createClient(url, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const openai = new OpenAI({ apiKey: openaiKey });
+
+  // NVIDIA NIM uses an OpenAI-compatible API
+  const nvidia = new OpenAI({
+    apiKey: nvidiaKey,
+    baseURL: 'https://integrate.api.nvidia.com/v1',
+  });
 
   for (const file of files) {
     const fullPath = path.join(KB_DIR, file);
@@ -39,11 +44,14 @@ async function main() {
     const title = (content.split('\n')[0] || file).replace(/^#\s*/, '').trim();
     const id = file.replace(/\.md$/, '');
 
-    const { data } = await openai.embeddings.create({
-      model: 'text-embedding-3-small',
+    const response = await nvidia.embeddings.create({
+      model: 'nvidia/nv-embedqa-e5-v5',
       input: content,
+      // @ts-ignore — NVIDIA NIM requires this extra param
+      encoding_format: 'float',
+      extra_body: { input_type: 'passage', truncate: 'END' },
     });
-    const embedding = data[0].embedding;
+    const embedding = response.data[0].embedding;
 
     const { error } = await supabase.from('kb_articles').upsert(
       {
@@ -62,10 +70,10 @@ async function main() {
       process.exit(1);
     }
 
-    console.log(`✅ Ingested ${id}`);
+    console.log(`✅ Ingested: ${title}`);
   }
 
-  console.log('KB ingestion complete');
+  console.log('\nKB ingestion complete — all articles loaded into Supabase.');
 }
 
 main().catch((err) => {

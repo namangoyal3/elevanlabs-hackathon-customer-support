@@ -32,18 +32,20 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
 CREATE INDEX IF NOT EXISTS idx_transcript_call ON transcript_chunks(call_id, timestamp);
 
 -- Knowledge base
-CREATE TABLE IF NOT EXISTS kb_articles (
+-- Drop and recreate to handle embedding dimension changes across environments.
+DROP TABLE IF EXISTS kb_articles CASCADE;
+CREATE TABLE kb_articles (
   id         TEXT PRIMARY KEY,
   title      TEXT NOT NULL,
   content    TEXT NOT NULL,
   url        TEXT,
-  embedding  vector(1536),
+  embedding  vector(1024),
   company_id TEXT DEFAULT 'novapay',
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- HNSW index (better recall than ivfflat, no train step). Cosine distance.
-CREATE INDEX IF NOT EXISTS kb_articles_embedding_hnsw
+CREATE INDEX kb_articles_embedding_hnsw
   ON kb_articles USING hnsw (embedding vector_cosine_ops);
 
 -- Knowledge gaps detected post-call
@@ -91,7 +93,7 @@ $$;
 
 -- KB vector search: cosine similarity, threshold-filtered, top-K.
 CREATE OR REPLACE FUNCTION match_kb_articles(
-  query_embedding vector(1536),
+  query_embedding vector(1024),
   match_threshold FLOAT,
   match_count     INT
 )
