@@ -74,6 +74,137 @@ CallPilot is a browser dashboard that sits alongside an agent's phone call. It l
 
 ---
 
+## Screenshots
+
+> **No screenshots yet?** Follow the [capture guide](docs/images/SCREENSHOT_GUIDE.md) — all 6 screens can be captured in under 10 minutes using built-in demo mode. No API keys required.
+
+---
+
+### 1 · Landing Page
+
+![CallPilot landing page — hero section with tagline and dashboard preview](docs/images/01-landing-page.png)
+
+The product entry point. Clean hero with a live mockup preview of the agent dashboard and a single call-to-action.
+
+<details>
+<summary>📸 How to capture</summary>
+
+1. Run `npm run dev`
+2. Open `http://localhost:3000`
+3. Wait ~1 second for the entrance animation to settle
+4. Capture full viewport at **1440px width or wider**
+5. Save as `docs/images/01-landing-page.png`
+
+</details>
+
+---
+
+### 2 · Persona Picker — Select Your Customer
+
+![Persona picker showing three NovaPay customer cards with tier badges and open tickets](docs/images/02-persona-picker.png)
+
+The agent's starting point before every call. Three NovaPay demo customers with tier (Standard / Premium / Enterprise), VIP badge, open ticket count, and a hook line showing why they're calling — so the agent begins every conversation with context.
+
+<details>
+<summary>📸 How to capture</summary>
+
+1. Open `http://localhost:3000/agent`
+2. The Persona Picker is the first screen — no interaction needed
+3. Capture the full page showing all 3 customer cards side by side
+4. Save as `docs/images/02-persona-picker.png`
+
+</details>
+
+---
+
+### 3 · Pre-Call Dashboard — Agent Ready Before First Ring
+
+![Pre-call dashboard showing caller brief panel and pre-loaded KB articles](docs/images/03-pre-call-dashboard.png)
+
+After selecting a customer, the agent sees their full profile — account tier, open tickets, recent call history — alongside KB articles pre-loaded based on the customer's predicted intent. The agent starts the call already knowing the answer.
+
+<details>
+<summary>📸 How to capture</summary>
+
+1. Open `http://localhost:3000/agent`
+2. Click **Kavitha Nair** (Enterprise tier — richest profile, VIP badge, green accent treatment)
+3. Wait for KB cards to load — no spinners should be visible
+4. Capture the full dashboard: Caller Brief on the left, KB cards on the right, "Start Call" button at the bottom
+5. Save as `docs/images/03-pre-call-dashboard.png`
+
+</details>
+
+---
+
+### 4 · Active Call Dashboard — The Co-Pilot in Action
+
+![Active call dashboard showing live transcript, intent badge, KB articles, sentiment bar, and suggested replies](docs/images/04-active-call.png)
+
+The core product. During a live call: the transcript updates in real time split by speaker, intent is classified every ~2 seconds, the top matching KB articles surface automatically, the sentiment bar tracks the customer's emotional state, and suggested replies are one click away. The agent never searches for anything.
+
+<details>
+<summary>📸 How to capture (Demo Mode — no API keys needed)</summary>
+
+1. Open `http://localhost:3000/agent?demo=1`
+2. Click **Priya Sharma** (Standard tier — failed_transaction demo, most active scenario)
+3. Click **Start Demo**
+4. Wait **15–20 seconds** for the transcript to build up and intent to classify
+5. Capture when you see: several transcript lines, intent badge labeled (e.g. `failed_transaction`), 2 KB cards surfaced, sentiment bar tracking, suggested reply chips visible
+6. **Widen your browser to 1600px** — the 3-column layout shows best at wider widths
+7. Save as `docs/images/04-active-call.png`
+
+This is the hero screenshot — take a few and pick the one with the most content visible.
+
+</details>
+
+---
+
+### 5 · Escalation Alert — Real-Time Risk Detection
+
+![Escalation alert banner firing over the active dashboard with sentiment bar in the hostile zone](docs/images/05-escalation-alert.png)
+
+When the customer's sentiment drops below the critical threshold, a red alert fires — automatically, before the customer asks for a manager. The agent gets ahead of the escalation instead of reacting to it.
+
+<details>
+<summary>📸 How to capture</summary>
+
+1. Open `http://localhost:3000/agent?demo=1`
+2. Click any persona → **Start Demo**
+3. Wait **30–45 seconds** — the demo script hits a frustrated customer segment at this point
+4. Watch the sentiment bar — when it moves into the red/hostile zone, the banner fires
+5. Capture **immediately** when the red "ESCALATION ALERT" banner appears — do not dismiss it
+6. Make sure both the banner AND the sentiment bar (in negative state) are visible in frame
+7. Save as `docs/images/05-escalation-alert.png`
+
+If you miss it: refresh and start over — the demo script is deterministic.
+
+</details>
+
+---
+
+### 6 · Post-Call Summary & QA Scorecard
+
+![Post-call summary panel showing AI summary, disposition, CSAT prediction, and 8-criterion QA scorecard](docs/images/06-post-call-summary.png)
+
+After the call ends, the AI automatically generates a structured summary, classifies the disposition, extracts follow-up action items, predicts a CSAT score, and scores the call on 8 QA criteria — all without the agent writing a single word.
+
+<details>
+<summary>📸 How to capture (Demo Mode)</summary>
+
+1. Open `http://localhost:3000/agent?demo=1`
+2. Click **Priya Sharma** → **Start Demo**
+3. Let the demo play for ~30 seconds, then click **End Call**
+4. The PostCallSummary panel loads with demo data in ~2–3 seconds
+5. Wait for all loading skeletons to resolve — capture when fully populated
+6. Show the full panel: summary text, disposition badge, CSAT score, follow-up list, and QA criteria scores
+7. Save as `docs/images/06-post-call-summary.png`
+
+**Tip:** The QA scorecard is below the summary. Consider two crops — one for the summary section, one for the scorecard — or scroll-stitch them if your tool supports it.
+
+</details>
+
+---
+
 ## Features
 
 ### Pre-Call Intelligence
@@ -300,7 +431,15 @@ This plays back a full scripted NovaPay call — failed transaction → escalati
     ├── PLAN.md                     Per-phase implementation plan
     ├── SETUP.md                    Detailed service setup guide
     ├── ARCHITECTURE.md             Technical decisions + data flow
-    └── WHISPER_COACH.md            Killer next feature (unimplemented)
+    ├── WHISPER_COACH.md            Killer next feature (unimplemented)
+    └── images/
+        ├── SCREENSHOT_GUIDE.md     How to capture each screenshot
+        ├── 01-landing-page.png     ← add your screenshot here
+        ├── 02-persona-picker.png   ← add your screenshot here
+        ├── 03-pre-call-dashboard.png
+        ├── 04-active-call.png      ← hero shot — most important
+        ├── 05-escalation-alert.png
+        └── 06-post-call-summary.png
 ```
 
 ---
