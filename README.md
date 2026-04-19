@@ -1,90 +1,41 @@
 # CallPilot
 
-AI co-pilot for customer support agents. Real-time KB retrieval, live transcript, sentiment, and post-call summaries — built on ElevenLabs Conversational AI, NVIDIA Nemotron, and Postgres+pgvector.
+AI co-pilot for customer support agents. Real-time KB retrieval, live transcript, sentiment, escalation alerts, and post-call summaries — built on ElevenLabs Conversational AI, NVIDIA Nemotron, and Supabase Postgres + pgvector.
 
-> Full product spec: [`CALLPILOT_PRD.md`](./CALLPILOT_PRD.md) · Task tracker: [`TASKLIST.md`](./TASKLIST.md)
+> Full product spec lives in [`CALLPILOT_PRD.md`](./CALLPILOT_PRD.md).
 
 ## Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 14 (App Router, TypeScript, Tailwind) |
-| Telephony | ElevenLabs Conversational AI (browser SDK + webhooks) |
-| LLM | NVIDIA Nemotron via NIM — `nano-8b` (intent) · `super-49b-v1.5` (summary/QA) |
-| Database | Supabase — Postgres + pgvector (RAG + persistence) |
-| Embeddings | OpenAI `text-embedding-3-small` (1536-dim) |
-| State | Zustand |
+- **Next.js 14** (App Router, TypeScript, Tailwind)
+- **ElevenLabs** Conversational AI (browser SDK + post-call webhooks)
+- **NVIDIA Nemotron** via NIM (OpenAI-compatible) for intent (`nano-8b`), summary + QA (`super-49b-v1.5`)
+- **Supabase** (Postgres + pgvector + JS SDK) for RAG and persistence
+- **NVIDIA `nv-embedqa-e5-v5`** (1024-dim, asymmetric) for KB embeddings — passage at ingest, query at search
 
----
+## Phase 0 — Local setup
 
-## Prerequisites
+### Prerequisites
+Node 20+, npm 10+, a Supabase project, ElevenLabs + NVIDIA API keys.
 
-- Node 20+ and npm 10+
-- A [Supabase](https://supabase.com) project
-- API keys: ElevenLabs · NVIDIA NIM · OpenAI
-
----
-
-## Running the Project
-
-### 1. Clone and install dependencies
-
-```bash
-git clone <repo-url>
-cd elevanlabs-hackathon-customer-support
-npm install
-```
-
-### 2. Configure external services
+### 1. External services
+See setup steps in `CALLPILOT_PRD.md` §13 / §15. Short version:
 
 | Service | What you need |
 |---------|---------------|
-| **Supabase** | Create a new project. Go to **Settings → API Keys** and copy the `URL`, `Publishable` key, and `Secret` key. Go to **Settings → Database → Connection string → URI** (Direct, port 5432) and copy as `DATABASE_URL` (append `?sslmode=require`). |
-| **ElevenLabs** | Create an agent from the "Customer Support" template. Copy the **Agent ID** and your **API Key**. |
-| **NVIDIA NIM** | Sign up at [build.nvidia.com](https://build.nvidia.com) and create an API key for the Nemotron model family. |
-| **OpenAI** | Create an API key at [platform.openai.com](https://platform.openai.com) (used for KB embeddings only). |
+| Supabase | New project. Database → Extensions → enable `vector`. Settings → Data API → copy `URL`. Settings → API Keys → copy `Publishable` (`sb_publishable_…`) and `Secret` (`sb_secret_…`) keys. Settings → Database → Connection string → URI (Direct, port 5432) → copy as `DATABASE_URL` (append `?sslmode=require`). |
+| ElevenLabs | Agent ID + API key. Create agent from "Customer Support" template. |
+| NVIDIA | API key from build.nvidia.com. Used for Nemotron LLM family (`nano-8b` + `super-49b-v1.5`) AND embeddings (`nv-embedqa-e5-v5`). |
 
-### 3. Set environment variables
-
+### 2. Install
 ```bash
-cp .env.example .env.local
+npm install
+cp .env.example .env.local      # then fill in real values
 ```
 
-Edit `.env.local` and fill in all values:
-
-```env
-# Supabase
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-SUPABASE_SECRET_KEY=sb_secret_...
-DATABASE_URL=postgresql://postgres:password@db.your-project.supabase.co:5432/postgres?sslmode=require
-
-# ElevenLabs
-ELEVENLABS_API_KEY=sk_...
-NEXT_PUBLIC_EL_AGENT_ID=your_agent_id
-ELEVENLABS_WEBHOOK_SECRET=your_webhook_secret
-
-# NVIDIA NIM (Nemotron)
-NVIDIA_API_KEY=nvapi-...
-
-# OpenAI (embeddings only)
-OPENAI_API_KEY=sk-...
-```
-
-### 4. Run database migrations
-
-**Option A — via Supabase SQL Editor (recommended)**
-
-1. Open your Supabase project → **SQL Editor → New query**
-2. Paste and run [`db/migrations/001_initial_schema.sql`](./db/migrations/001_initial_schema.sql)
-3. Optionally paste and run [`db/migrations/002_seed_demo_data.sql`](./db/migrations/002_seed_demo_data.sql) for demo data
-
-**Option B — via npm script (requires `DATABASE_URL` to be set)**
-
+### 3. Run migrations
 ```bash
 npm run db:migrate
 ```
-
 Expected output:
 ```
 → Connected to Postgres
@@ -93,80 +44,69 @@ Expected output:
 ✅ pgvector ready
 ```
 
-### 5. Ingest the knowledge base (Phase 1)
-
-After creating KB articles in `kb/novapay/*.md`:
-
-```bash
-npm run db:ingest-kb
-```
-
-This embeds all markdown articles into pgvector using OpenAI embeddings.
-
-### 6. Start the development server
-
+### 4. Verify
 ```bash
 npm run dev
 ```
+Open http://localhost:3000 → click "Open Agent Dashboard".
+Visit http://localhost:3000/api/health → should return `{ ok: true, db: { now: ..., vector_installed: true } }`.
 
-| URL | Description |
-|-----|-------------|
-| http://localhost:3000 | Landing page |
-| http://localhost:3000/agent | Agent co-pilot dashboard |
-| http://localhost:3000/api/health | DB health check — should return `{ ok: true, db: { vector_installed: true } }` |
-
-### 7. Type check
-
-```bash
-npm run typecheck
-```
-
----
-
-## Project Layout
+## Project layout
 
 ```
 app/
-  page.tsx                    Landing page
-  agent/page.tsx              Co-pilot dashboard (Phase 2)
-  api/
-    health/route.ts           DB health check endpoint
-    stream/route.ts           SSE push endpoint (Phase 3)
-    webhooks/call/end/        ElevenLabs post-call webhook (Phase 4)
+  page.tsx                         landing
+  agent/page.tsx                   co-pilot dashboard
+  api/health/route.ts              DB connectivity check
+  api/kb/preload/route.ts          GET ?ids=a,b,c → KB articles
+  api/transcript/route.ts          POST live transcript chunk → intent/KB/sentiment pipeline
+  api/stream/route.ts              GET SSE for a callId
+  api/webhooks/call/end/route.ts   HMAC-verified post-call webhook
 lib/
-  db.ts                       Supabase admin client (singleton)
-  store.ts                    Zustand call state store (Phase 2)
-  rag.ts                      Embedding + vector search (Phase 3)
-  ai.ts                       NVIDIA Nemotron NIM client (Phase 3)
-  use-call-pilot.ts           ElevenLabs hook (Phase 3)
-  transcript-handler.ts       Transcript persistence (Phase 3)
-  post-call.ts                Summary + QA pipeline (Phase 4)
-components/                   UI components (Phase 2)
-types/index.ts                Shared TypeScript interfaces
-db/
-  schema.sql                  Idempotent Postgres schema
-  migrations/
-    001_initial_schema.sql    Full schema + RPC functions (run in Supabase)
-    002_seed_demo_data.sql    Demo calls, transcripts, QA data
+  db.ts                            Supabase admin client (lazy, no-store fetch)
+  rag.ts                           ragSearch via match_kb_articles RPC
+  nvidia-embed.ts                  embedPassage / embedQuery
+  nvidia-llm.ts                    nano-8b + super-49b clients
+  intent-parser.ts                 defensive LLM JSON → IntentResult
+  transcript-handler.ts            rolling buffer, debounce, sentiment
+  sse-bus.ts                       in-memory pub/sub
+  elevenlabs-agent.ts              useCallPilot hook
+  post-call.ts                     summary + QA pipeline
+  summary.ts · qa-criteria.ts      summary/QA helpers + 8-criterion rubric
+  hmac.ts                          HMAC-SHA256 verify/sign
+  store.ts                         Zustand CallState store
+  demo-personas.ts · suggested-replies.ts
+components/                        10 UI components (CallerBrief, LiveTranscript, …)
+types/index.ts                     shared TypeScript types
+db/schema.sql                      idempotent Postgres schema + RPCs
 scripts/
-  migrate.ts                  Runs db/schema.sql via raw pg connection
-  ingest-kb.ts                Embeds kb/novapay/*.md into pgvector
-kb/novapay/                   Knowledge base markdown articles (Phase 1)
-TASKLIST.md                   Phase-by-phase task checklist
-CALLPILOT_PRD.md              Full product requirements document
+  migrate.ts                       applies db/schema.sql
+  ingest-kb.ts                     embeds kb/novapay/*.md into pgvector
+  smoke-rag.ts                     end-to-end retrieval check
+kb/novapay/                        8 knowledge-base markdown articles
+tests/                             node:test suites (65 tests)
+docs/PLAN.md                       per-phase implementation plan
 ```
-
----
 
 ## Roadmap
 
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 0 — Scaffold | ✅ Complete | Next.js setup, DB schema, types, migration scripts |
-| 1 — Knowledge Base | Pending | Write KB articles, ingest into pgvector |
-| 2 — Co-Pilot UI | Pending | Agent dashboard, Zustand store, all components |
-| 3 — Live Call | Pending | ElevenLabs integration, RAG pipeline, SSE stream |
-| 4 — Post-Call | Pending | Webhook, summarization, QA scoring, KB gap detection |
-| 5 — Deploy | Pending | Vercel deployment, RLS, demo scenarios |
+- **Phase 0 ✅** scaffold · branch [`phase-0-setup`](../../tree/phase-0-setup)
+- **Phase 1 ✅** KB + RAG · branch [`phase-1-kb`](../../tree/phase-1-kb) · 8 KB articles, 3 demo scenarios retrieve correctly
+- **Phase 2 ✅** Agent UI + Zustand store · branch [`phase-2-ui`](../../tree/phase-2-ui) · 10 components, 4 state transitions
+- **Phase 3 ✅** Live call pipeline · branch [`phase-3-live-call`](../../tree/phase-3-live-call) · ElevenLabs SDK + intent detection + SSE
+- **Phase 4 ✅** Post-call webhook · branch [`phase-4-post-call`](../../tree/phase-4-post-call) · HMAC + summary + 8-criterion QA
+- **Phase 5 ⏳** Polish + deploy · branch [`phase-5-polish`](../../tree/phase-5-polish) · responsive stack, suggested replies
 
-See [`TASKLIST.md`](./TASKLIST.md) for the detailed checklist and [`CALLPILOT_PRD.md`](./CALLPILOT_PRD.md) for the full spec.
+See [`docs/PLAN.md`](docs/PLAN.md) for per-phase exit criteria and locked architecture decisions.
+
+## Commands
+
+```bash
+npm run dev                  # Next.js dev server
+npm run typecheck            # tsc --noEmit
+npm test                     # node:test suites in tests/
+npm run db:migrate           # apply db/schema.sql
+MIGRATE_RESET_KB=true npm run db:migrate  # destructive — drop + recreate kb_articles
+npm run db:ingest-kb         # embed kb/novapay/*.md via NVIDIA → kb_articles
+npm run smoke:rag            # verify the 3 PRD demo queries retrieve the right articles
+```

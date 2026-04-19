@@ -16,6 +16,14 @@ function buildClient(): SupabaseClient {
   return createClient(url, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
     db: { schema: 'public' },
+    // Next.js wraps fetch() with per-request caching. Supabase JS uses fetch
+    // internally, so without this override RPC results get served stale from
+    // Next's cache. Explicit no-store keeps every call fresh — critical once
+    // Phase 3 starts updating transcript + RAG state in real time.
+    global: {
+      fetch: (input, init) =>
+        fetch(input as RequestInfo, { ...(init as RequestInit | undefined), cache: 'no-store' }),
+    },
   });
 }
 

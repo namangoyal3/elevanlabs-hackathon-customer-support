@@ -23,8 +23,18 @@ async function main() {
 
   await client.connect();
   console.log('→ Connected to Postgres');
-  console.log(`→ Applying ${SCHEMA_PATH}`);
 
+  if (process.env.MIGRATE_RESET_KB === 'true') {
+    console.warn('⚠️  MIGRATE_RESET_KB=true — dropping kb_articles (DATA LOSS).');
+    await client.query(`
+      DROP FUNCTION IF EXISTS match_kb_articles(vector, float, int) CASCADE;
+      DROP INDEX IF EXISTS kb_articles_embedding_hnsw;
+      DROP TABLE IF EXISTS kb_articles CASCADE;
+    `);
+    console.log('→ kb_articles dropped');
+  }
+
+  console.log(`→ Applying ${SCHEMA_PATH}`);
   await client.query(sql);
   console.log('✅ Migration complete');
 
