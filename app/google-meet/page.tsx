@@ -1,444 +1,482 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { KbCard } from '@/components/KbCard';
+import { SentimentBar } from '@/components/SentimentBar';
+import { IntentBadge } from '@/components/IntentBadge';
+import { SuggestedReplies } from '@/components/SuggestedReplies';
+import type { KbArticle } from '@/types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
-interface TranscriptChunk {
+interface LocalChunk {
   id: number;
-  speaker: 'Agent' | 'Customer';
+  speaker: 'agent' | 'customer';
   text: string;
-  timestamp: string;
+  timestamp: number;
 }
 
-interface Suggestions {
-  responseImprovement: string | null;
-  missingInfo: string | null;
-  toneAdvice: string | null;
-  kbReference: string | null;
-  nextAction: string | null;
-  urgencyLevel: 'low' | 'medium' | 'high' | null;
-}
+// ── Demo transcript (NovaPay UPI failure scenario) ────────────────────────────
 
-// ─── Demo transcript (NovaPay UPI failure scenario) ───────────────────────────
-
-const DEMO_TRANSCRIPT: Omit<TranscriptChunk, 'id' | 'timestamp'>[] = [
-  { speaker: 'Customer', text: "Hi, I really need help. My UPI payment failed and the money got deducted from my account but the merchant didn't receive it." },
-  { speaker: 'Agent',    text: "Okay, I'll look into that." },
-  { speaker: 'Customer', text: "It was ₹8,500 to Swiggy Instamart. This is urgent, I need it resolved today. My groceries depend on it." },
-  { speaker: 'Agent',    text: "Sure. What's your account number?" },
-  { speaker: 'Customer', text: "It's NPY-78432. I'm a NovaPay Premium member by the way. This has never happened before and I'm really stressed." },
-  { speaker: 'Agent',    text: "I can see the transaction. It shows a pending status on our end. It might resolve in 24-48 hours automatically." },
-  { speaker: 'Customer', text: "24-48 hours?! That's not acceptable. I have no groceries at home. Is there anything faster you can do?" },
-  { speaker: 'Agent',    text: "We can initiate a refund but that also takes 3-5 business days." },
-  { speaker: 'Customer', text: "This is really frustrating. I rely on NovaPay for everything. Can I speak to a supervisor or get some kind of priority handling?" },
-  { speaker: 'Agent',    text: "I can escalate but I'm not sure how fast that will be." },
+const DEMO_LINES: Omit<LocalChunk, 'id' | 'timestamp'>[] = [
+  { speaker: 'customer', text: 'Hi, I really need help. My UPI payment of ₹8,500 failed yesterday but the money was already debited from my NovaPay account.' },
+  { speaker: 'agent',    text: "I'm sorry to hear that. Let me look into this right away for you. Can I get your registered mobile number or account ID?" },
+  { speaker: 'customer', text: "It's NPY-78432. I'm a Premium member. The payment was to Swiggy Instamart and I still have pending groceries." },
+  { speaker: 'agent',    text: 'Got it, I can see your account now. The transaction is showing a pending status on our end.' },
+  { speaker: 'customer', text: 'How long is this going to take? I need this resolved today, not in three days.' },
+  { speaker: 'agent',    text: 'I understand. Typically these auto-resolve in 24 to 48 hours but let me see what I can do for you.' },
+  { speaker: 'customer', text: "That's absolutely unacceptable. Every time I call NovaPay I get the same runaround. I want to speak to a supervisor now." },
+  { speaker: 'agent',    text: "I completely understand your frustration. Let me escalate this to our senior team who can initiate a priority refund." },
+  { speaker: 'customer', text: 'Will there be any compensation? This has caused me real inconvenience and stress.' },
+  { speaker: 'agent',    text: "Absolutely, I'll make a note of that. Our senior team can authorise cashback for Premium members in situations like this." },
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function now() {
-  return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function formatDuration(s: number) {
+  const m = Math.floor(s / 60).toString().padStart(2, '0');
+  const sec = (s % 60).toString().padStart(2, '0');
+  return `${m}:${sec}`;
 }
 
-function urgencyColor(level: string | null) {
-  if (level === 'high') return 'text-red-400 bg-red-400/10 border-red-400/30';
-  if (level === 'medium') return 'text-yellow-400 bg-yellow-400/10 border-yellow-400/30';
-  return 'text-green-400 bg-green-400/10 border-green-400/30';
+// Safely get SpeechRecognition constructor across browsers
+function getSpeechRecognition(): (new () => SpeechRecognition) | null {
+  if (typeof window === 'undefined') return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-function tryParseJSON(raw: string): Suggestions | null {
-  try {
-    const start = raw.indexOf('{');
-    const end = raw.lastIndexOf('}');
-    if (start === -1 || end === -1) return null;
-    return JSON.parse(raw.slice(start, end + 1)) as Suggestions;
-  } catch {
-    return null;
-  }
-}
-
-// ─── Components ───────────────────────────────────────────────────────────────
-
-function SuggestionCard({ label, value, accent }: { label: string; value: string | null; accent: string }) {
-  if (!value) return null;
-  return (
-    <div className={`rounded-lg border p-3 ${accent}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">{label}</p>
-      <p className="text-sm leading-relaxed">{value}</p>
-    </div>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ── Main Component ─────────────────────────────────────────────────────────────
 
 export default function GoogleMeetPage() {
-  const [transcript, setTranscript] = useState<TranscriptChunk[]>([]);
-  const [inputText, setInputText] = useState('');
-  const [inputSpeaker, setInputSpeaker] = useState<'Agent' | 'Customer'>('Customer');
-  const [suggestions, setSuggestions] = useState<Suggestions | null>(null);
-  const [rawStream, setRawStream] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [demoPlaying, setDemoPlaying] = useState(false);
-  const [demoIndex, setDemoIndex] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
-  const [connected, setConnected] = useState(false);
+  // Stable callId for this page session
+  const callId = useMemo(
+    () => `gm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    [],
+  );
 
-  const transcriptEndRef = useRef<HTMLDivElement>(null);
-  const demoRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const chunkId = useRef(0);
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [isListening, setIsListening]       = useState(false);
+  const [micAvailable, setMicAvailable]     = useState<boolean | null>(null);
+  const [transcript, setTranscript]         = useState<LocalChunk[]>([]);
+  const [speaker, setSpeaker]               = useState<'agent' | 'customer'>('customer');
+  const [inputText, setInputText]           = useState('');
+  const [elapsed, setElapsed]               = useState(0);
+  const [demoPlaying, setDemoPlaying]       = useState(false);
+  const [sessionActive, setSessionActive]   = useState(false);
 
-  // Auto-scroll transcript
+  // ── Analysis state — driven by real SSE from /api/stream ─────────────────
+  const [kbCards, setKbCards]               = useState<KbArticle[]>([]);
+  const [intent, setIntent]                 = useState('');
+  const [intentConfidence, setIntentConf]   = useState(0);
+  const [sentiment, setSentiment]           = useState(0);
+  const [suggestedReplies, setReplies]      = useState<string[]>([]);
+  const [escalation, setEscalation]         = useState(false);
+
+  const chunkId        = useRef(0);
+  const transcriptEnd  = useRef<HTMLDivElement>(null);
+  const demoTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const elapsedTimer   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recognition    = useRef<SpeechRecognition | null>(null);
+  // Keep a ref in sync with `speaker` so the SpeechRecognition callback
+  // always reads the current value without needing to restart the session.
+  const speakerRef     = useRef<'agent' | 'customer'>('customer');
+
+  // ── Check mic availability on mount ───────────────────────────────────────
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript]);
-
-  // Elapsed timer
-  useEffect(() => {
-    if (connected) {
-      timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000);
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [connected]);
-
-  const formatElapsed = (s: number) => {
-    const m = Math.floor(s / 60).toString().padStart(2, '0');
-    const sec = (s % 60).toString().padStart(2, '0');
-    return `${m}:${sec}`;
-  };
-
-  // ── Analyze transcript via SSE ─────────────────────────────────────────────
-  const analyze = useCallback(async (chunks: TranscriptChunk[]) => {
-    if (chunks.length < 2) return;
-    setIsAnalyzing(true);
-    setRawStream('');
-    setSuggestions(null);
-
-    const text = chunks
-      .map(c => `${c.speaker}: ${c.text}`)
-      .join('\n');
-
-    try {
-      const res = await fetch('/api/google-meet/suggestions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: text }),
-      });
-
-      if (!res.ok || !res.body) throw new Error('Request failed');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let accumulated = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const lines = decoder.decode(value).split('\n');
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6).trim();
-          if (!payload) continue;
-          try {
-            const parsed = JSON.parse(payload) as { content?: string; done?: boolean; error?: string };
-            if (parsed.error) throw new Error(parsed.error);
-            if (parsed.done) break;
-            if (parsed.content) {
-              accumulated += parsed.content;
-              setRawStream(accumulated);
-              const parsed2 = tryParseJSON(accumulated);
-              if (parsed2) setSuggestions(parsed2);
-            }
-          } catch { /* skip malformed SSE lines */ }
-        }
-      }
-
-      const final = tryParseJSON(accumulated);
-      if (final) setSuggestions(final);
-    } catch (err) {
-      console.error('Suggestion error:', err);
-    } finally {
-      setIsAnalyzing(false);
-    }
+    setMicAvailable(getSpeechRecognition() !== null);
   }, []);
 
-  // ── Add a chunk manually ───────────────────────────────────────────────────
-  const addChunk = useCallback((speaker: 'Agent' | 'Customer', text: string) => {
-    const chunk: TranscriptChunk = {
-      id: ++chunkId.current,
-      speaker,
-      text: text.trim(),
-      timestamp: now(),
-    };
-    setTranscript(prev => {
-      const next = [...prev, chunk];
-      // Re-analyze after every agent turn, or every 3 chunks
-      if (speaker === 'Agent' || next.length % 3 === 0) analyze(next);
-      return next;
-    });
-  }, [analyze]);
+  // Keep speakerRef in sync so SpeechRecognition callbacks always read current
+  useEffect(() => { speakerRef.current = speaker; }, [speaker]);
 
-  // ── Demo mode ─────────────────────────────────────────────────────────────
-  const runDemoStep = useCallback((index: number) => {
-    if (index >= DEMO_TRANSCRIPT.length) {
-      setDemoPlaying(false);
-      return;
+  // ── Elapsed timer ─────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (sessionActive) {
+      elapsedTimer.current = setInterval(() => setElapsed((e) => e + 1), 1000);
+    } else {
+      if (elapsedTimer.current) clearInterval(elapsedTimer.current);
     }
-    const item = DEMO_TRANSCRIPT[index];
-    addChunk(item.speaker, item.text);
-    setDemoIndex(index + 1);
-    const delay = item.speaker === 'Customer' ? 3500 : 2200;
-    demoRef.current = setTimeout(() => runDemoStep(index + 1), delay);
-  }, [addChunk]);
+    return () => { if (elapsedTimer.current) clearInterval(elapsedTimer.current); };
+  }, [sessionActive]);
+
+  // ── Auto-scroll transcript ────────────────────────────────────────────────
+  useEffect(() => {
+    transcriptEnd.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [transcript]);
+
+  // ── SSE subscription — receive real analysis from backend ─────────────────
+  useEffect(() => {
+    const es = new EventSource(`/api/stream?callId=${encodeURIComponent(callId)}`);
+
+    es.addEventListener('intent', (e: MessageEvent) => {
+      const d = JSON.parse(e.data as string) as { label: string; confidence: number };
+      setIntent(d.label);
+      setIntentConf(d.confidence);
+    });
+
+    es.addEventListener('kb_update', (e: MessageEvent) => {
+      const d = JSON.parse(e.data as string) as { articles: KbArticle[] };
+      setKbCards(d.articles.slice(0, 2));
+    });
+
+    es.addEventListener('sentiment', (e: MessageEvent) => {
+      const d = JSON.parse(e.data as string) as { score: number };
+      setSentiment(d.score);
+    });
+
+    es.addEventListener('escalation', () => setEscalation(true));
+
+    es.addEventListener('suggested_replies', (e: MessageEvent) => {
+      const d = JSON.parse(e.data as string) as { replies: string[] };
+      setReplies(d.replies);
+    });
+
+    return () => es.close();
+  }, [callId]);
+
+  // ── Post a transcript chunk to the backend ────────────────────────────────
+  const addChunk = useCallback(
+    async (spk: 'agent' | 'customer', text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const chunk: LocalChunk = {
+        id: ++chunkId.current,
+        speaker: spk,
+        text: trimmed,
+        timestamp: Date.now(),
+      };
+      setTranscript((prev) => [...prev, chunk]);
+      if (!sessionActive) setSessionActive(true);
+
+      try {
+        await fetch('/api/transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callId, speaker: spk, text: trimmed, timestamp: chunk.timestamp }),
+        });
+      } catch {
+        // Silent: local UI already updated — backend analysis is secondary
+      }
+    },
+    [callId, sessionActive],
+  );
+
+  // ── Web Speech API ────────────────────────────────────────────────────────
+  const startMic = useCallback(() => {
+    const SR = getSpeechRecognition();
+    if (!SR) return;
+
+    const r = new SR();
+    r.continuous = true;
+    r.interimResults = false;
+    r.lang = 'en-IN';
+
+    r.onresult = (event: SpeechRecognitionEvent) => {
+      const last = event.results[event.results.length - 1];
+      if (last.isFinal && last[0].transcript.trim()) {
+        // speakerRef.current always reflects the current selector value
+        void addChunk(speakerRef.current, last[0].transcript.trim());
+      }
+    };
+
+    r.onerror = () => {
+      setIsListening(false);
+      recognition.current = null;
+    };
+
+    r.start();
+    recognition.current = r;
+    setIsListening(true);
+  }, [addChunk, speakerRef]);
+
+  const stopMic = useCallback(() => {
+    recognition.current?.stop();
+    recognition.current = null;
+    setIsListening(false);
+  }, []);
+
+  // ── Demo mode — routes all chunks through real backend ────────────────────
+  const runDemoStep = useCallback(
+    (idx: number) => {
+      if (idx >= DEMO_LINES.length) {
+        setDemoPlaying(false);
+        return;
+      }
+      const line = DEMO_LINES[idx];
+      void addChunk(line.speaker, line.text);
+      const delay = line.speaker === 'customer' ? 4200 : 2800;
+      demoTimer.current = setTimeout(() => runDemoStep(idx + 1), delay);
+    },
+    [addChunk],
+  );
 
   const startDemo = useCallback(() => {
-    if (demoRef.current) clearTimeout(demoRef.current);
+    if (demoTimer.current) clearTimeout(demoTimer.current);
     setTranscript([]);
-    setSuggestions(null);
-    setRawStream('');
-    setDemoIndex(0);
-    setDemoPlaying(true);
-    setConnected(true);
+    setKbCards([]);
+    setReplies([]);
+    setEscalation(false);
+    setIntent('');
+    setIntentConf(0);
+    setSentiment(0);
     setElapsed(0);
-    demoRef.current = setTimeout(() => runDemoStep(0), 800);
+    setDemoPlaying(true);
+    setSessionActive(true);
+    demoTimer.current = setTimeout(() => runDemoStep(0), 600);
   }, [runDemoStep]);
 
   const stopDemo = useCallback(() => {
-    if (demoRef.current) clearTimeout(demoRef.current);
+    if (demoTimer.current) clearTimeout(demoTimer.current);
     setDemoPlaying(false);
   }, []);
 
-  useEffect(() => () => {
-    if (demoRef.current) clearTimeout(demoRef.current);
-  }, []);
+  // Cleanup on unmount
+  useEffect(
+    () => () => {
+      if (demoTimer.current) clearTimeout(demoTimer.current);
+      stopMic();
+    },
+    [stopMic],
+  );
 
-  // ── Submit manual input ────────────────────────────────────────────────────
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
-    if (!connected) setConnected(true);
-    addChunk(inputSpeaker, inputText);
+    void addChunk(speaker, inputText);
     setInputText('');
   };
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-bg text-white flex flex-col">
+    <div className="bg-bg text-fg flex min-h-screen flex-col">
 
       {/* ── Header ── */}
-      <header className="bg-surface border-b border-border px-6 py-3 flex items-center justify-between">
+      <header className="bg-surface border-border flex items-center justify-between border-b px-6 py-3">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            {/* Google Meet icon (coloured dots) */}
-            <div className="flex gap-[3px]">
-              <span className="w-2 h-2 rounded-full bg-blue-400" />
-              <span className="w-2 h-2 rounded-full bg-red-400" />
-              <span className="w-2 h-2 rounded-full bg-yellow-400" />
-              <span className="w-2 h-2 rounded-full bg-green-400" />
-            </div>
-            <span className="font-semibold text-sm">Google Meet · AI Co-pilot</span>
+          {/* Google Meet coloured dots */}
+          <div className="flex items-center gap-2.5">
+            <span className="flex gap-[3px]" aria-hidden="true">
+              <span className="h-2 w-2 rounded-full bg-blue-400" />
+              <span className="h-2 w-2 rounded-full bg-red-400" />
+              <span className="h-2 w-2 rounded-full bg-yellow-400" />
+              <span className="h-2 w-2 rounded-full bg-green-400" />
+            </span>
+            <span className="text-fg text-sm font-semibold">Google Meet · AI Co-pilot</span>
           </div>
-          {connected && (
-            <div className="flex items-center gap-2 text-xs text-muted">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              Live · {formatElapsed(elapsed)}
+
+          {sessionActive && (
+            <div className="text-fg-muted flex items-center gap-1.5 font-mono text-2xs">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+              {isListening ? 'Listening' : 'Active'} · {formatDuration(elapsed)}
             </div>
           )}
         </div>
+
         <div className="flex items-center gap-3">
+          {escalation && (
+            <span className="border-alert/40 bg-alert/20 text-alert-fg animate-pulse rounded-full border px-3 py-1 text-xs font-medium">
+              ⚠ Escalation risk
+            </span>
+          )}
+
           {demoPlaying ? (
             <button
               onClick={stopDemo}
-              className="text-xs px-3 py-1.5 rounded border border-border text-muted hover:text-white transition-colors"
+              className="border-border text-fg-muted hover:text-fg rounded border px-3 py-1.5 text-xs transition-colors"
             >
-              Stop Demo
+              Stop demo
             </button>
           ) : (
             <button
               onClick={startDemo}
-              className="text-xs px-3 py-1.5 rounded bg-accent hover:opacity-90 transition-opacity font-medium"
+              className="bg-accent text-accent-fg hover:bg-accent/90 rounded px-3 py-1.5 text-xs font-medium transition-colors"
             >
-              ▶ Run Demo
+              ▶ Run demo
             </button>
           )}
-          <a href="/" className="text-xs text-muted hover:text-white transition-colors">← CallPilot</a>
+
+          <a href="/" className="text-fg-subtle hover:text-fg text-xs transition-colors">
+            ← Home
+          </a>
         </div>
       </header>
 
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* ── Left: Simulated Meet UI + Transcript ── */}
-        <div className="flex flex-col w-1/2 border-r border-border overflow-hidden">
+        {/* ── Left panel: Meet simulation + transcript ── */}
+        <div className="border-border flex w-1/2 flex-col overflow-hidden border-r">
 
-          {/* Fake camera feeds */}
-          <div className="bg-[#202124] flex gap-2 p-3 border-b border-border">
-            <div className="flex-1 rounded-lg bg-[#3c4043] aspect-video flex items-center justify-center relative overflow-hidden">
-              <div className="w-12 h-12 rounded-full bg-blue-600 flex items-center justify-center text-lg font-bold">A</div>
-              <span className="absolute bottom-2 left-2 text-[10px] bg-black/50 px-1.5 py-0.5 rounded">Agent (You)</span>
+          {/* Simulated camera tiles */}
+          <div className="border-border flex gap-2 border-b bg-[#202124] p-3">
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-lg bg-[#3c4043] aspect-video">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-lg font-bold">A</div>
+              <span className="absolute bottom-2 left-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px]">
+                Agent (You)
+              </span>
+              {isListening && (
+                <span
+                  className="absolute right-2 top-2 h-2 w-2 animate-pulse rounded-full bg-red-400"
+                  title="Microphone active"
+                />
+              )}
             </div>
-            <div className="flex-1 rounded-lg bg-[#3c4043] aspect-video flex items-center justify-center relative overflow-hidden">
-              <div className="w-12 h-12 rounded-full bg-orange-600 flex items-center justify-center text-lg font-bold">C</div>
-              <span className="absolute bottom-2 left-2 text-[10px] bg-black/50 px-1.5 py-0.5 rounded">Customer</span>
+            <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-lg bg-[#3c4043] aspect-video">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-600 text-lg font-bold">C</div>
+              <span className="absolute bottom-2 left-2 rounded bg-black/50 px-1.5 py-0.5 text-[10px]">
+                Customer
+              </span>
             </div>
           </div>
 
-          {/* Live Transcript */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            <p className="text-[10px] text-muted uppercase tracking-widest mb-2">Live Transcript</p>
+          {/* Transcript scroll */}
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+            <p className="text-fg-subtle font-mono text-2xs uppercase tracking-[0.14em]">
+              Live transcript
+            </p>
 
             {transcript.length === 0 && (
-              <div className="text-center text-muted mt-12">
-                <p className="text-sm">No transcript yet.</p>
-                <p className="text-xs mt-1">Click <strong>Run Demo</strong> or type below to start.</p>
+              <div className="mt-12 text-center">
+                <p className="text-fg-muted text-sm">No transcript yet.</p>
+                <p className="text-fg-subtle mt-1 text-xs">
+                  Click <strong className="text-fg-muted">Run demo</strong>, start the mic, or type below.
+                </p>
               </div>
             )}
 
-            {transcript.map(chunk => (
-              <div key={chunk.id} className={`flex gap-2 ${chunk.speaker === 'Agent' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  chunk.speaker === 'Agent' ? 'bg-blue-600' : 'bg-orange-600'
-                }`}>
-                  {chunk.speaker[0]}
+            {transcript.map((chunk) => (
+              <div
+                key={chunk.id}
+                className={`flex gap-2 ${chunk.speaker === 'agent' ? 'flex-row-reverse' : ''}`}
+              >
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    chunk.speaker === 'agent' ? 'bg-blue-600' : 'bg-orange-600'
+                  }`}
+                >
+                  {chunk.speaker === 'agent' ? 'A' : 'C'}
                 </div>
-                <div className={`max-w-[75%] rounded-2xl px-3 py-2 ${
-                  chunk.speaker === 'Agent'
-                    ? 'bg-blue-600/20 border border-blue-600/30'
-                    : 'bg-surface border border-border'
-                }`}>
-                  <p className="text-[10px] text-muted mb-0.5">{chunk.speaker} · {chunk.timestamp}</p>
-                  <p className="text-sm leading-relaxed">{chunk.text}</p>
+                <div
+                  className={`max-w-[78%] rounded-2xl px-3 py-2 ${
+                    chunk.speaker === 'agent'
+                      ? 'border border-blue-600/30 bg-blue-600/10'
+                      : 'bg-surface border-border border'
+                  }`}
+                >
+                  <p className="text-fg-subtle mb-0.5 text-[10px]">
+                    {chunk.speaker === 'agent' ? 'Agent' : 'Customer'} ·{' '}
+                    {new Date(chunk.timestamp).toLocaleTimeString('en-IN', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })}
+                  </p>
+                  <p className="text-fg text-sm leading-relaxed">{chunk.text}</p>
                 </div>
               </div>
             ))}
-            <div ref={transcriptEndRef} />
+            <div ref={transcriptEnd} />
           </div>
 
-          {/* Manual input */}
-          <form onSubmit={handleSubmit} className="border-t border-border p-3 flex gap-2 items-end bg-surface">
-            <select
-              value={inputSpeaker}
-              onChange={e => setInputSpeaker(e.target.value as 'Agent' | 'Customer')}
-              className="bg-bg border border-border rounded px-2 py-2 text-xs text-white focus:outline-none focus:border-accent"
-            >
-              <option value="Customer">Customer</option>
-              <option value="Agent">Agent</option>
-            </select>
-            <input
-              type="text"
-              value={inputText}
-              onChange={e => setInputText(e.target.value)}
-              placeholder="Type transcript line..."
-              className="flex-1 bg-bg border border-border rounded px-3 py-2 text-sm placeholder-muted focus:outline-none focus:border-accent"
-            />
-            <button
-              type="submit"
-              disabled={!inputText.trim()}
-              className="bg-accent px-4 py-2 rounded text-sm font-medium hover:opacity-90 disabled:opacity-40 transition-opacity"
-            >
-              Add
-            </button>
-          </form>
+          {/* Input controls */}
+          <div className="bg-surface border-border space-y-2 border-t p-3">
+            <div className="flex items-center gap-2">
+              {/* Mic button */}
+              {micAvailable ? (
+                <button
+                  onClick={isListening ? stopMic : startMic}
+                  className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                    isListening
+                      ? 'border-alert/40 bg-alert/20 text-alert-fg border'
+                      : 'border-border bg-surface-2 text-fg-muted hover:text-fg border'
+                  }`}
+                >
+                  {isListening ? '⬛ Stop mic' : '🎤 Start mic'}
+                </button>
+              ) : (
+                <span className="text-fg-subtle rounded border border-dashed px-3 py-1.5 text-xs">
+                  Mic: Chrome only
+                </span>
+              )}
+
+              {/* Speaker selector */}
+              <select
+                id="gm-speaker-select"
+                value={speaker}
+                onChange={(e) => setSpeaker(e.target.value as 'agent' | 'customer')}
+                className="bg-bg border-border text-fg focus:border-accent rounded border px-2 py-1.5 text-xs focus:outline-none"
+              >
+                <option value="customer">Customer</option>
+                <option value="agent">Agent</option>
+              </select>
+              <span className="text-fg-subtle text-xs">speaking</span>
+            </div>
+
+            {/* Manual text input */}
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Type a transcript line…"
+                className="bg-bg border-border placeholder:text-fg-subtle text-fg focus:border-accent flex-1 rounded border px-3 py-1.5 text-sm focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!inputText.trim()}
+                className="bg-accent text-accent-fg hover:bg-accent/90 rounded px-3 py-1.5 text-sm font-medium transition-opacity disabled:opacity-40"
+              >
+                Add
+              </button>
+            </form>
+          </div>
         </div>
 
-        {/* ── Right: AI Suggestions ── */}
-        <div className="w-1/2 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-sm">AI Suggestions</h2>
-              <p className="text-[11px] text-muted mt-0.5">Updates automatically as conversation unfolds</p>
-            </div>
-            {isAnalyzing && (
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                Analyzing…
-              </div>
-            )}
-            {suggestions?.urgencyLevel && !isAnalyzing && (
-              <span className={`text-[10px] font-semibold uppercase px-2 py-1 rounded border ${urgencyColor(suggestions.urgencyLevel)}`}>
-                {suggestions.urgencyLevel} urgency
-              </span>
-            )}
+        {/* ── Right panel: AI Co-pilot ── */}
+        <div className="flex w-1/2 flex-col overflow-hidden">
+          <div className="border-border border-b p-4">
+            <h2 className="text-fg text-sm font-semibold">AI Co-pilot</h2>
+            <p className="text-fg-muted mt-0.5 text-xs">
+              Real-time intent · KB retrieval · Suggested replies · Sentiment
+            </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {!suggestions && !isAnalyzing && (
-              <div className="text-center text-muted mt-16">
-                <p className="text-sm">Waiting for transcript…</p>
-                <p className="text-xs mt-1">Suggestions appear automatically after each agent turn.</p>
-              </div>
-            )}
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
 
-            {isAnalyzing && !suggestions && (
+            {/* Intent badge */}
+            <IntentBadge label={intent} confidence={intentConfidence} />
+
+            {/* Sentiment */}
+            <SentimentBar score={sentiment} />
+
+            {/* KB cards */}
+            {kbCards.length > 0 ? (
               <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="rounded-lg border border-border p-3 animate-pulse">
-                    <div className="h-2 bg-border rounded w-1/3 mb-2" />
-                    <div className="h-3 bg-border rounded w-full mb-1" />
-                    <div className="h-3 bg-border rounded w-4/5" />
-                  </div>
+                {kbCards.map((card, i) => (
+                  <KbCard key={card.id} article={card} rank={i + 1} />
                 ))}
               </div>
-            )}
-
-            {suggestions && (
-              <div className="space-y-3">
-                <SuggestionCard
-                  label="Better Response"
-                  value={suggestions.responseImprovement}
-                  accent="text-blue-300 border-blue-400/30 bg-blue-400/5"
-                />
-                <SuggestionCard
-                  label="Tone & Empathy"
-                  value={suggestions.toneAdvice}
-                  accent="text-purple-300 border-purple-400/30 bg-purple-400/5"
-                />
-                <SuggestionCard
-                  label="Missing Information"
-                  value={suggestions.missingInfo}
-                  accent="text-yellow-300 border-yellow-400/30 bg-yellow-400/5"
-                />
-                <SuggestionCard
-                  label="Knowledge Reference"
-                  value={suggestions.kbReference}
-                  accent="text-green-300 border-green-400/30 bg-green-400/5"
-                />
-                <SuggestionCard
-                  label="Recommended Next Step"
-                  value={suggestions.nextAction}
-                  accent="text-orange-300 border-orange-400/30 bg-orange-400/5"
-                />
-
-                {isAnalyzing && (
-                  <div className="flex items-center gap-2 text-xs text-muted pt-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                    Updating suggestions…
-                  </div>
-                )}
+            ) : (
+              <div className="border-border bg-surface shadow-card rounded-lg border p-5 text-center">
+                <p className="text-fg-muted text-sm">KB articles will appear once intent is detected.</p>
+                <p className="text-fg-subtle mt-1 text-xs">
+                  Start speaking or run the demo to trigger RAG retrieval.
+                </p>
               </div>
             )}
 
-            {/* Raw stream debug (collapsed) */}
-            {rawStream && !suggestions && (
-              <details className="mt-4">
-                <summary className="text-[10px] text-muted cursor-pointer">Raw AI output</summary>
-                <pre className="text-[10px] text-muted mt-2 whitespace-pre-wrap font-mono bg-surface border border-border rounded p-2 max-h-40 overflow-y-auto">
-                  {rawStream}
-                </pre>
-              </details>
-            )}
+            {/* Suggested replies */}
+            <SuggestedReplies replies={suggestedReplies} />
           </div>
 
-          {/* How it works footer */}
-          <div className="border-t border-border p-3 bg-surface">
-            <p className="text-[10px] text-muted leading-relaxed">
-              <span className="text-white font-medium">How it works:</span> The AI co-pilot monitors the live transcript via Google Meet captions,
-              analyzes each turn using NVIDIA Nemotron, and streams improvement suggestions in real-time —
-              helping agents respond better, faster.
+          {/* Footer: how it works */}
+          <div className="bg-surface border-border border-t p-3">
+            <p className="text-fg-subtle text-[10px] leading-relaxed">
+              <span className="text-fg-muted font-medium">How it works — </span>
+              Each transcript line is sent to the NovaPay KB pipeline: NVIDIA Nemotron detects
+              intent, pgvector RAG surfaces the top KB articles, and suggested replies are
+              generated — all streamed back via Server-Sent Events in real time.
             </p>
           </div>
         </div>
